@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release:
+    name: Publish SDK & Deploy Backend
+    runs-on: ubuntu-latest
+    # Only run after CI passes
+    needs: []
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm check-types
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Build SDK
+        run: pnpm build --filter @ai-player/sdk
+
+      - name: Publish SDK to npm
+        run: pnpm publish --filter @ai-player/sdk --no-git-checks --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Deploy backend to Railway
+        uses: railwayapp/railway-deploy-action@v1
+        with:
+          railway-token: ${{ secrets.RAILWAY_TOKEN }}
+          service: ${{ secrets.RAILWAY_SERVICE_ID }}
