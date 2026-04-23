@@ -14,7 +14,9 @@
     },
     "./style.css": "./dist/style.css"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -28,15 +30,17 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.2.4",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "tailwindcss": "^4.2.4",
+    "typescript": "5.9.2",
     "vite": "^6.0.0",
     "vite-plugin-dts": "^4.5.4",
-    "vitest": "^3.0.0",
-    "typescript": "5.9.2"
+    "vitest": "^3.0.0"
   },
   "dependencies": {
     "zustand": "^5.0.0"
