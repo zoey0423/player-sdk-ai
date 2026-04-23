@@ -1,21 +1,34 @@
 import { useRef, useEffect, useCallback } from 'react'
 import { usePlayerStore, SubtitleTrack } from '../store/playerStore'
 import { ProgressBar } from './ProgressBar'
-import type { ThumbnailTrack } from './ThumbnailPreview'
+import { ThumbnailTrack } from './ThumbnailPreview'
+import { PlayerFeatures, resolveFeatures } from '../types/features'
+import { PlayerEvent } from '../types/events'
+import { emitEvent } from '../utils/emitEvent'
 
 export interface VideoPlayerProps {
   src: string
-  apiKey?: string
-  theme?: 'light' | 'dark'
-  subtitles?: SubtitleTrack[]
-  thumbnails?: ThumbnailTrack
+  apiKey?: string | undefined
+  theme?: 'light' | 'dark' | undefined
+  subtitles?: SubtitleTrack[] | undefined
+  thumbnails?: ThumbnailTrack | undefined
+  features?: PlayerFeatures | undefined
+  onEvent?: ((event: PlayerEvent) => void) | undefined
 }
 
 const PLAYBACK_RATES = [1, 1.5, 2] as const
 
-export function VideoPlayer({ src, theme = 'dark', subtitles = [], thumbnails }: VideoPlayerProps) {
+export function VideoPlayer({
+  src,
+  theme = 'dark',
+  subtitles = [],
+  thumbnails,
+  features: featuresProp,
+  onEvent,
+}: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const features = resolveFeatures(featuresProp)
 
   const {
     playing, volume, muted, playbackRate,
@@ -70,16 +83,14 @@ export function VideoPlayer({ src, theme = 'dark', subtitles = [], thumbnails }:
     })
   }, [subtitlesEnabled, activeSubtitleIndex])
 
-  // Listen for fullscreenchange to sync store
+  // Listen for fullscreenchange
   useEffect(() => {
-    const onFullscreenChange = () => {
-      setFullscreen(!!document.fullscreenElement)
-    }
-    document.addEventListener('fullscreenchange', onFullscreenChange)
-    return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
+    const handler = () => setFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', handler)
+    return () => document.removeEventListener('fullscreenchange', handler)
   }, [setFullscreen])
 
-  // Listen for PiP events to sync store
+  // Listen for PiP events
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
@@ -93,12 +104,42 @@ export function VideoPlayer({ src, theme = 'dark', subtitles = [], thumbnails }:
     }
   }, [setPip])
 
+  const handleTogglePlay = useCallback(() => {
+    const { playing: isPlaying, currentTime } = usePlayerStore.getState()
+    togglePlay()
+    emitEvent(onEvent, isPlaying ? 'player:pause' : 'player:play', { currentTime })
+  }, [togglePlay, onEvent])
+
   const handleSeek = useCallback(
     (time: number) => {
+      const from = usePlayerStore.getState().currentTime
       seek(time)
       if (videoRef.current) videoRef.current.currentTime = time
+      emitEvent(onEvent, 'player:seek', { from, to: time })
     },
-    [seek],
+    [seek, onEvent],
+  )
+
+  const handleSetVolume = useCallback(
+    (vol: number) => {
+      setVolume(vol)
+      emitEvent(onEvent, 'player:volume', { volume: vol, muted: false })
+    },
+    [setVolume, onEvent],
+  )
+
+  const handleToggleMute = useCallback(() => {
+    const { muted: isMuted, volume: vol } = usePlayerStore.getState()
+    toggleMute()
+    emitEvent(onEvent, 'player:volume', { volume: vol, muted: !isMuted })
+  }, [toggleMute, onEvent])
+
+  const handleSetRate = useCallback(
+    (rate: number) => {
+      setPlaybackRate(rate)
+      emitEvent(onEvent, 'player:rate', { rate })
+    },
+    [setPlaybackRate, onEvent],
   )
 
   const handleFullscreen = useCallback(() => {
@@ -111,14 +152,29 @@ export function VideoPlayer({ src, theme = 'dark', subtitles = [], thumbnails }:
 
   const handlePip = useCallback(async () => {
     const video = videoRef.current
-    if (!video) return
-    if (!document.pictureInPictureEnabled) return
+    if (!video || !document.pictureInPictureEnabled) return
     if (document.pictureInPictureElement) {
       await document.exitPictureInPicture()
     } else {
       await video.requestPictureInPicture()
     }
   }, [])
+
+  const handleSkipForward = useCallback(() => {
+    const from = usePlayerStore.getState().currentTime
+    skipForward()
+    const to = usePlayerStore.getState().currentTime
+    if (videoRef.current) videoRef.current.currentTime = to
+    emitEvent(onEvent, 'player:seek', { from, to })
+  }, [skipForward, onEvent])
+
+  const handleSkipBackward = useCallback(() => {
+    const from = usePlayerStore.getState().currentTime
+    skipBackward()
+    const to = usePlayerStore.getState().currentTime
+    if (videoRef.current) videoRef.current.currentTime = to
+    emitEvent(onEvent, 'player:seek', { from, to })
+  }, [skipBackward, onEvent])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -128,31 +184,27 @@ export function VideoPlayer({ src, theme = 'dark', subtitles = [], thumbnails }:
       switch (e.code) {
         case 'Space':
           e.preventDefault()
-          togglePlay()
+          handleTogglePlay()
           break
         case 'ArrowRight':
           e.preventDefault()
-          skipForward()
-          if (videoRef.current)
-            videoRef.current.currentTime = usePlayerStore.getState().currentTime
+          handleSkipForward()
           break
         case 'ArrowLeft':
           e.preventDefault()
-          skipBackward()
-          if (videoRef.current)
-            videoRef.current.currentTime = usePlayerStore.getState().currentTime
+          handleSkipBackward()
           break
         case 'KeyF':
           handleFullscreen()
           break
         case 'KeyM':
-          toggleMute()
+          handleToggleMute()
           break
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [togglePlay, skipForward, skipBackward, toggleMute, handleFullscreen])
+  }, [handleTogglePlay, handleSkipForward, handleSkipBackward, handleToggleMute, handleFullscreen])
 
   const isDark = theme === 'dark'
   const pipSupported = typeof document !== 'undefined' && 'pictureInPictureEnabled' in document
@@ -167,7 +219,7 @@ export function VideoPlayer({ src, theme = 'dark', subtitles = [], thumbnails }:
         ref={videoRef}
         src={src}
         className="aip-w-full aip-cursor-pointer"
-        onClick={togglePlay}
+        onClick={handleTogglePlay}
         onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime ?? 0)}
         onLoadedMetadata={() => setDuration(videoRef.current?.duration ?? 0)}
         onEnded={() => usePlayerStore.getState().pause()}
@@ -184,28 +236,26 @@ export function VideoPlayer({ src, theme = 'dark', subtitles = [], thumbnails }:
         ))}
       </video>
 
-      {/* Controls */}
       <div className="aip-absolute aip-bottom-0 aip-left-0 aip-right-0 aip-flex aip-flex-col aip-gap-2 aip-bg-gradient-to-t aip-from-black/70 aip-p-3">
         <ProgressBar onSeek={handleSeek} thumbnails={thumbnails} />
 
         <div className="aip-flex aip-items-center aip-gap-3">
-          <button aria-label="Rewind 10 seconds" className="aip-text-white aip-opacity-80 hover:aip-opacity-100" onClick={skipBackward}>⏪</button>
-          <button aria-label={playing ? 'Pause' : 'Play'} className="aip-text-white aip-text-xl" onClick={togglePlay}>{playing ? '⏸' : '▶️'}</button>
-          <button aria-label="Forward 10 seconds" className="aip-text-white aip-opacity-80 hover:aip-opacity-100" onClick={skipForward}>⏩</button>
+          <button aria-label="Rewind 10 seconds" className="aip-text-white aip-opacity-80 hover:aip-opacity-100" onClick={handleSkipBackward}>⏪</button>
+          <button aria-label={playing ? 'Pause' : 'Play'} className="aip-text-white aip-text-xl" onClick={handleTogglePlay}>{playing ? '⏸' : '▶️'}</button>
+          <button aria-label="Forward 10 seconds" className="aip-text-white aip-opacity-80 hover:aip-opacity-100" onClick={handleSkipForward}>⏩</button>
 
-          <button aria-label={muted ? 'Unmute' : 'Mute'} className="aip-text-white" onClick={toggleMute}>{muted ? '🔇' : '🔊'}</button>
+          <button aria-label={muted ? 'Unmute' : 'Mute'} className="aip-text-white" onClick={handleToggleMute}>{muted ? '🔇' : '🔊'}</button>
           <input
             type="range" min={0} max={1} step={0.05}
             value={muted ? 0 : volume}
             aria-label="Volume"
             className="aip-w-20"
-            onChange={(e) => setVolume(Number((e.target as HTMLInputElement).value))}
+            onChange={(e) => handleSetVolume(Number((e.target as HTMLInputElement).value))}
           />
 
           <span className="aip-flex-1" />
 
-          {/* Subtitles toggle */}
-          {subtitles.length > 0 && (
+          {subtitles.length > 0 && features.subtitles && (
             <button
               aria-label={subtitlesEnabled ? 'Disable subtitles' : 'Enable subtitles'}
               aria-pressed={subtitlesEnabled}
@@ -216,7 +266,6 @@ export function VideoPlayer({ src, theme = 'dark', subtitles = [], thumbnails }:
             </button>
           )}
 
-          {/* Playback rate */}
           <div className="aip-flex aip-gap-1">
             {PLAYBACK_RATES.map((rate) => (
               <button
@@ -224,15 +273,14 @@ export function VideoPlayer({ src, theme = 'dark', subtitles = [], thumbnails }:
                 aria-label={`${rate}x speed`}
                 aria-pressed={playbackRate === rate}
                 className={`aip-rounded aip-px-1.5 aip-py-0.5 aip-text-xs aip-text-white ${playbackRate === rate ? 'aip-bg-white/30' : 'aip-opacity-60'}`}
-                onClick={() => setPlaybackRate(rate)}
+                onClick={() => handleSetRate(rate)}
               >
                 {rate}x
               </button>
             ))}
           </div>
 
-          {/* PiP */}
-          {pipSupported && (
+          {pipSupported && features.pip && (
             <button
               aria-label={isPip ? 'Exit picture-in-picture' : 'Picture-in-picture'}
               className="aip-text-white aip-opacity-80 hover:aip-opacity-100"
@@ -242,7 +290,6 @@ export function VideoPlayer({ src, theme = 'dark', subtitles = [], thumbnails }:
             </button>
           )}
 
-          {/* Fullscreen */}
           <button
             aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
             className="aip-text-white"
