@@ -1,5 +1,12 @@
 import { create } from 'zustand'
 
+export interface SubtitleTrack {
+  src: string
+  label: string
+  lang: string
+  default?: boolean
+}
+
 export interface PlayerState {
   playing: boolean
   currentTime: number
@@ -8,6 +15,9 @@ export interface PlayerState {
   muted: boolean
   playbackRate: number
   isFullscreen: boolean
+  isPip: boolean
+  subtitlesEnabled: boolean
+  activeSubtitleIndex: number
 }
 
 export interface PlayerActions {
@@ -21,6 +31,12 @@ export interface PlayerActions {
   toggleMute: () => void
   setPlaybackRate: (rate: number) => void
   setFullscreen: (value: boolean) => void
+  toggleFullscreen: () => void
+  setPip: (value: boolean) => void
+  togglePip: () => void
+  setSubtitlesEnabled: (value: boolean) => void
+  toggleSubtitles: () => void
+  setActiveSubtitleIndex: (index: number) => void
   skipForward: () => void
   skipBackward: () => void
 }
@@ -35,6 +51,9 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
   muted: false,
   playbackRate: 1,
   isFullscreen: false,
+  isPip: false,
+  subtitlesEnabled: false,
+  activeSubtitleIndex: 0,
 
   play: () => set({ playing: true }),
   pause: () => set({ playing: false }),
@@ -50,10 +69,15 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
   toggleMute: () => set((s) => ({ muted: !s.muted })),
   setPlaybackRate: (playbackRate) => set({ playbackRate }),
   setFullscreen: (isFullscreen) => set({ isFullscreen }),
+  toggleFullscreen: () => set((s) => ({ isFullscreen: !s.isFullscreen })),
+  setPip: (isPip) => set({ isPip }),
+  togglePip: () => set((s) => ({ isPip: !s.isPip })),
+  setSubtitlesEnabled: (subtitlesEnabled) => set({ subtitlesEnabled }),
+  toggleSubtitles: () => set((s) => ({ subtitlesEnabled: !s.subtitlesEnabled })),
+  setActiveSubtitleIndex: (activeSubtitleIndex) => set({ activeSubtitleIndex }),
   skipForward: () => {
     const { currentTime, duration } = get()
-    const next = Math.min(currentTime + 10, duration)
-    set({ currentTime: next })
+    set({ currentTime: Math.min(currentTime + 10, duration) })
   },
   skipBackward: () => {
     const { currentTime } = get()
