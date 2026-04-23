@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schema.railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "pnpm install --frozen-lockfile && pnpm build --filter @ai-player/backend"
+  },
+  "deploy": {
+    "startCommand": "node apps/backend/dist/index.js",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}
