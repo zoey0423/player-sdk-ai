@@ -1,17 +1,19 @@
 import { useRef, useEffect, useCallback } from 'react'
 import { usePlayerStore, SubtitleTrack } from '../store/playerStore'
 import { ProgressBar } from './ProgressBar'
+import type { ThumbnailTrack } from './ThumbnailPreview'
 
 export interface VideoPlayerProps {
   src: string
   apiKey?: string
   theme?: 'light' | 'dark'
   subtitles?: SubtitleTrack[]
+  thumbnails?: ThumbnailTrack
 }
 
 const PLAYBACK_RATES = [1, 1.5, 2] as const
 
-export function VideoPlayer({ src, theme = 'dark', subtitles = [] }: VideoPlayerProps) {
+export function VideoPlayer({ src, theme = 'dark', subtitles = [], thumbnails }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -184,7 +186,7 @@ export function VideoPlayer({ src, theme = 'dark', subtitles = [] }: VideoPlayer
 
       {/* Controls */}
       <div className="aip-absolute aip-bottom-0 aip-left-0 aip-right-0 aip-flex aip-flex-col aip-gap-2 aip-bg-gradient-to-t aip-from-black/70 aip-p-3">
-        <ProgressBar onSeek={handleSeek} />
+        <ProgressBar onSeek={handleSeek} thumbnails={thumbnails} />
 
         <div className="aip-flex aip-items-center aip-gap-3">
           <button aria-label="Rewind 10 seconds" className="aip-text-white aip-opacity-80 hover:aip-opacity-100" onClick={skipBackward}>⏪</button>
