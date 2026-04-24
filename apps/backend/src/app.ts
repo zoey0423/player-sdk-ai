@@ -1,5 +1,6 @@
 import express from 'express'
 import { neon } from '@neondatabase/serverless'
+import { progressRouter } from './routes/progress'
 
 export const app = express()
 
@@ -20,5 +21,7 @@ app.get('/health', async (_req, res) => {
 
   res.json({ status: 'ok', db: dbStatus })
 })
+
+app.use('/api/v1/progress', progressRouter)
 
 export default app

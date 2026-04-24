@@ -6,10 +6,14 @@ import { PlayerFeatures, resolveFeatures } from '../types/features'
 import { PlayerEvent } from '../types/events'
 import { emitEvent } from '../utils/emitEvent'
 import { resolveTenantId } from '../constants'
+import { useProgressSync } from '../hooks/useProgressSync'
+import { useProgressResume } from '../hooks/useProgressResume'
+import { formatTime } from '../utils/time'
 
 export interface VideoPlayerProps {
   src: string
   apiKey?: string | undefined
+  apiBaseUrl?: string | undefined
   theme?: 'light' | 'dark' | undefined
   subtitles?: SubtitleTrack[] | undefined
   thumbnails?: ThumbnailTrack | undefined
@@ -22,6 +26,7 @@ const PLAYBACK_RATES = [1, 1.5, 2] as const
 export function VideoPlayer({
   src,
   apiKey,
+  apiBaseUrl,
   theme = 'dark',
   subtitles = [],
   thumbnails,
@@ -32,6 +37,9 @@ export function VideoPlayer({
   const containerRef = useRef<HTMLDivElement>(null)
   const tenantId = resolveTenantId(apiKey)
   const features = resolveFeatures(featuresProp)
+
+  useProgressSync({ src, apiKey, apiBaseUrl, videoRef })
+  const { resumePosition, dismissResume } = useProgressResume({ src, apiKey, apiBaseUrl })
 
   const {
     playing, volume, muted, playbackRate,
@@ -239,6 +247,33 @@ export function VideoPlayer({
           />
         ))}
       </video>
+
+      {resumePosition !== null && (
+        <div
+          data-testid="resume-banner"
+          className="aip-absolute aip-top-3 aip-left-1/2 aip-z-10 -aip-translate-x-1/2 aip-flex aip-items-center aip-gap-2 aip-rounded-lg aip-bg-black/80 aip-px-4 aip-py-2 aip-text-sm aip-text-white"
+        >
+          <span>继续观看 {formatTime(resumePosition)}</span>
+          <button
+            aria-label="Resume from last position"
+            className="aip-rounded aip-bg-white/20 aip-px-2 aip-py-1 aip-text-xs hover:aip-bg-white/30"
+            onClick={() => {
+              if (videoRef.current) videoRef.current.currentTime = resumePosition
+              seek(resumePosition)
+              dismissResume()
+            }}
+          >
+            继续
+          </button>
+          <button
+            aria-label="Start from beginning"
+            className="aip-rounded aip-px-2 aip-py-1 aip-text-xs aip-opacity-70 hover:aip-opacity-100"
+            onClick={dismissResume}
+          >
+            从头
+          </button>
+        </div>
+      )}
 
       <div className="aip-absolute aip-bottom-0 aip-left-0 aip-right-0 aip-flex aip-flex-col aip-gap-2 aip-bg-gradient-to-t aip-from-black/70 aip-p-3">
         <ProgressBar onSeek={handleSeek} thumbnails={thumbnails} />
