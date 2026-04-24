@@ -4,6 +4,7 @@ import { neon } from '@neondatabase/serverless'
 import { progressRouter } from './routes/progress'
 import { videosRouter } from './routes/videos'
 import { eventsRouter } from './routes/events'
+import { adminRouter } from './routes/admin'
 
 export const app = express()
 
@@ -53,5 +54,6 @@ app.get('/health', async (_req, res) => {
 app.use('/api/v1/progress', apiLimiter, progressRouter)
 app.use('/api/v1/videos', apiLimiter, videosRouter)
 app.use('/api/v1/events', eventsLimiter, eventsRouter)
+app.use('/api/v1/admin', apiLimiter, adminRouter)
 
 export default app
