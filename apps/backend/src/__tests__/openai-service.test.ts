@@ -1,59 +1,136 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { transcribeVideo, analyzeTranscript, type TranscriptWord } from '../services/openai-service'
 
-// Mock the global fetch for video download
 vi.stubGlobal('fetch', vi.fn())
 
-describe('transcribeVideo', () => {
-  it('throws when client is null (no OPENAI_API_KEY)', async () => {
-    await expect(transcribeVideo('https://example.com/video.mp4', null)).rejects.toThrow('OPENAI_API_KEY')
+describe('transcribeVideo (DashScope Paraformer)', () => {
+  const originalEnv = process.env
+
+  beforeEach(() => {
+    process.env = { ...originalEnv }
+    vi.mocked(fetch).mockReset()
   })
 
-  it('calls client.audio.transcriptions.create with correct model', async () => {
+  afterEach(() => {
+    process.env = originalEnv
+  })
+
+  it('throws when DASHSCOPE_API_KEY is not set', async () => {
+    delete process.env.DASHSCOPE_API_KEY
+    await expect(transcribeVideo('https://example.com/video.mp4')).rejects.toThrow('DASHSCOPE_API_KEY')
+  })
+
+  it('submits task, polls, fetches transcript and returns words', async () => {
+    process.env.DASHSCOPE_API_KEY = 'test-key'
+
     const mockFetch = vi.mocked(fetch)
+
+    // 1. Submit response
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      arrayBuffer: async () => new ArrayBuffer(8),
+      json: async () => ({ output: { task_id: 'task-123' }, request_id: 'req-1' }),
     } as Response)
 
-    const mockClient = {
-      audio: {
-        transcriptions: {
-          create: vi.fn().mockResolvedValue({
-            words: [
-              { word: 'hello', start: 0, end: 0.5 },
-              { word: 'world', start: 0.5, end: 1.0 },
-            ],
-          }),
+    // 2. Poll response (SUCCEEDED)
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        output: {
+          task_status: 'SUCCEEDED',
+          results: [{ transcription_url: 'https://cdn.example.com/transcript.json' }],
         },
-      },
-    }
+      }),
+    } as Response)
 
-    const result = await transcribeVideo('https://example.com/video.mp4', mockClient as never)
-    expect(mockClient.audio.transcriptions.create).toHaveBeenCalledWith(
-      expect.objectContaining({ model: 'gpt-4o-mini-transcribe' }),
-    )
+    // 3. Fetch transcript JSON
+    const transcriptPayload = {
+      transcripts: [{
+        sentences: [{
+          text: '你好世界',
+          begin_time: 0,
+          end_time: 2000,
+          words: [
+            { text: '你好', begin_time: 0, end_time: 1000 },
+            { text: '世界', begin_time: 1000, end_time: 2000 },
+          ],
+        }],
+      }],
+    }
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => transcriptPayload,
+    } as Response)
+
+    const result = await transcribeVideo('https://example.com/video.mp4', undefined, 0)
+
     expect(result).toHaveLength(2)
-    expect(result[0]).toEqual({ word: 'hello', startTime: 0, endTime: 0.5 })
-    expect(result[1]).toEqual({ word: 'world', startTime: 0.5, endTime: 1.0 })
+    expect(result[0]).toEqual({ word: '你好', startTime: 0, endTime: 1 })
+    expect(result[1]).toEqual({ word: '世界', startTime: 1, endTime: 2 })
   })
 
-  it('returns empty array when no words in response', async () => {
+  it('falls back to sentence-level when no words array', async () => {
+    process.env.DASHSCOPE_API_KEY = 'test-key'
     const mockFetch = vi.mocked(fetch)
+
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      arrayBuffer: async () => new ArrayBuffer(8),
+      json: async () => ({ output: { task_id: 'task-456' }, request_id: 'req-2' }),
     } as Response)
 
-    const mockClient = {
-      audio: {
-        transcriptions: {
-          create: vi.fn().mockResolvedValue({}),
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        output: {
+          task_status: 'SUCCEEDED',
+          results: [{ transcription_url: 'https://cdn.example.com/t2.json' }],
         },
-      },
-    }
+      }),
+    } as Response)
 
-    const result = await transcribeVideo('https://example.com/video.mp4', mockClient as never)
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        transcripts: [{ sentences: [{ text: '测试句子', begin_time: 0, end_time: 3000 }] }],
+      }),
+    } as Response)
+
+    const result = await transcribeVideo('https://example.com/video.mp4', undefined, 0)
+    expect(result).toHaveLength(1)
+    expect(result[0]).toEqual({ word: '测试句子', startTime: 0, endTime: 3 })
+  })
+
+  it('throws when task status is FAILED', async () => {
+    process.env.DASHSCOPE_API_KEY = 'test-key'
+    const mockFetch = vi.mocked(fetch)
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ output: { task_id: 'task-789' }, request_id: 'req-3' }),
+    } as Response)
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ output: { task_status: 'FAILED', results: [] } }),
+    } as Response)
+
+    await expect(transcribeVideo('https://example.com/video.mp4', undefined, 0)).rejects.toThrow('DashScope ASR task failed')
+  })
+
+  it('returns empty array when no transcription_url in result', async () => {
+    process.env.DASHSCOPE_API_KEY = 'test-key'
+    const mockFetch = vi.mocked(fetch)
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ output: { task_id: 'task-000' }, request_id: 'req-4' }),
+    } as Response)
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ output: { task_status: 'SUCCEEDED', results: [{}] } }),
+    } as Response)
+
+    const result = await transcribeVideo('https://example.com/video.mp4', undefined, 0)
     expect(result).toEqual([])
   })
 })
