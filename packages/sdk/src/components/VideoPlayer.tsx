@@ -5,6 +5,7 @@ import { ThumbnailTrack } from './ThumbnailPreview'
 import { PlayerFeatures, resolveFeatures } from '../types/features'
 import { PlayerEvent } from '../types/events'
 import { emitEvent } from '../utils/emitEvent'
+import { resolveTenantId } from '../constants'
 
 export interface VideoPlayerProps {
   src: string
@@ -20,6 +21,7 @@ const PLAYBACK_RATES = [1, 1.5, 2] as const
 
 export function VideoPlayer({
   src,
+  apiKey,
   theme = 'dark',
   subtitles = [],
   thumbnails,
@@ -28,6 +30,7 @@ export function VideoPlayer({
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const tenantId = resolveTenantId(apiKey)
   const features = resolveFeatures(featuresProp)
 
   const {
@@ -213,6 +216,7 @@ export function VideoPlayer({
     <div
       ref={containerRef}
       data-testid="video-player"
+      data-tenant-id={tenantId}
       className={`aip-relative aip-w-full aip-overflow-hidden aip-rounded-lg ${isDark ? 'aip-bg-black' : 'aip-bg-gray-100'}`}
     >
       <video
@@ -240,11 +244,11 @@ export function VideoPlayer({
         <ProgressBar onSeek={handleSeek} thumbnails={thumbnails} />
 
         <div className="aip-flex aip-items-center aip-gap-3">
-          <button aria-label="Rewind 10 seconds" className="aip-text-white aip-opacity-80 hover:aip-opacity-100" onClick={handleSkipBackward}>⏪</button>
-          <button aria-label={playing ? 'Pause' : 'Play'} className="aip-text-white aip-text-xl" onClick={handleTogglePlay}>{playing ? '⏸' : '▶️'}</button>
-          <button aria-label="Forward 10 seconds" className="aip-text-white aip-opacity-80 hover:aip-opacity-100" onClick={handleSkipForward}>⏩</button>
+          <button aria-label="Rewind 10 seconds" className="aip-flex aip-items-center aip-justify-center aip-min-w-[44px] aip-min-h-[44px] aip-text-white aip-opacity-80 hover:aip-opacity-100" onClick={handleSkipBackward}>⏪</button>
+          <button aria-label={playing ? 'Pause' : 'Play'} className="aip-flex aip-items-center aip-justify-center aip-min-w-[44px] aip-min-h-[44px] aip-text-white aip-text-xl" onClick={handleTogglePlay}>{playing ? '⏸' : '▶️'}</button>
+          <button aria-label="Forward 10 seconds" className="aip-flex aip-items-center aip-justify-center aip-min-w-[44px] aip-min-h-[44px] aip-text-white aip-opacity-80 hover:aip-opacity-100" onClick={handleSkipForward}>⏩</button>
 
-          <button aria-label={muted ? 'Unmute' : 'Mute'} className="aip-text-white" onClick={handleToggleMute}>{muted ? '🔇' : '🔊'}</button>
+          <button aria-label={muted ? 'Unmute' : 'Mute'} className="aip-flex aip-items-center aip-justify-center aip-min-w-[44px] aip-min-h-[44px] aip-text-white" onClick={handleToggleMute}>{muted ? '🔇' : '🔊'}</button>
           <input
             type="range" min={0} max={1} step={0.05}
             value={muted ? 0 : volume}
@@ -259,7 +263,7 @@ export function VideoPlayer({
             <button
               aria-label={subtitlesEnabled ? 'Disable subtitles' : 'Enable subtitles'}
               aria-pressed={subtitlesEnabled}
-              className={`aip-rounded aip-px-1.5 aip-py-0.5 aip-text-xs aip-text-white ${subtitlesEnabled ? 'aip-bg-white/30' : 'aip-opacity-60'}`}
+              className={`aip-flex aip-items-center aip-justify-center aip-min-h-[44px] aip-rounded aip-px-2 aip-py-0.5 aip-text-xs aip-text-white ${subtitlesEnabled ? 'aip-bg-white/30' : 'aip-opacity-60'}`}
               onClick={toggleSubtitles}
             >
               CC
@@ -272,7 +276,7 @@ export function VideoPlayer({
                 key={rate}
                 aria-label={`${rate}x speed`}
                 aria-pressed={playbackRate === rate}
-                className={`aip-rounded aip-px-1.5 aip-py-0.5 aip-text-xs aip-text-white ${playbackRate === rate ? 'aip-bg-white/30' : 'aip-opacity-60'}`}
+                className={`aip-flex aip-items-center aip-justify-center aip-min-h-[44px] aip-rounded aip-px-2 aip-py-0.5 aip-text-xs aip-text-white ${playbackRate === rate ? 'aip-bg-white/30' : 'aip-opacity-60'}`}
                 onClick={() => handleSetRate(rate)}
               >
                 {rate}x
@@ -283,7 +287,7 @@ export function VideoPlayer({
           {pipSupported && features.pip && (
             <button
               aria-label={isPip ? 'Exit picture-in-picture' : 'Picture-in-picture'}
-              className="aip-text-white aip-opacity-80 hover:aip-opacity-100"
+              className="aip-flex aip-items-center aip-justify-center aip-min-w-[44px] aip-min-h-[44px] aip-text-white aip-opacity-80 hover:aip-opacity-100"
               onClick={handlePip}
             >
               ⧉
@@ -292,7 +296,7 @@ export function VideoPlayer({
 
           <button
             aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-            className="aip-text-white"
+            className="aip-flex aip-items-center aip-justify-center aip-min-w-[44px] aip-min-h-[44px] aip-text-white"
             onClick={handleFullscreen}
           >
             {isFullscreen ? '⛶' : '⛶'}
