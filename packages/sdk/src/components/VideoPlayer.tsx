@@ -8,10 +8,15 @@ import { emitEvent } from '../utils/emitEvent'
 import { resolveTenantId } from '../constants'
 import { useProgressSync } from '../hooks/useProgressSync'
 import { useProgressResume } from '../hooks/useProgressResume'
+import { useAIContent } from '../hooks/useAIContent'
+import { useAIStore } from '../store/aiStore'
+import { SummaryPanel } from './SummaryPanel'
+import { TranscriptPanel } from './TranscriptPanel'
 import { formatTime } from '../utils/time'
 
 export interface VideoPlayerProps {
   src: string
+  videoId?: string | undefined
   apiKey?: string | undefined
   apiBaseUrl?: string | undefined
   theme?: 'light' | 'dark' | undefined
@@ -25,6 +30,7 @@ const PLAYBACK_RATES = [1, 1.5, 2] as const
 
 export function VideoPlayer({
   src,
+  videoId,
   apiKey,
   apiBaseUrl,
   theme = 'dark',
@@ -40,6 +46,8 @@ export function VideoPlayer({
 
   useProgressSync({ src, apiKey, apiBaseUrl, videoRef })
   const { resumePosition, dismissResume } = useProgressResume({ src, apiKey, apiBaseUrl })
+  useAIContent({ videoId, apiKey, apiBaseUrl })
+  const { highlights } = useAIStore()
 
   const {
     playing, volume, muted, playbackRate,
@@ -221,10 +229,11 @@ export function VideoPlayer({
   const pipSupported = typeof document !== 'undefined' && 'pictureInPictureEnabled' in document
 
   return (
-    <div
-      ref={containerRef}
-      data-testid="video-player"
-      data-tenant-id={tenantId}
+    <div className="aip-flex aip-flex-col aip-gap-3">
+      <div
+        ref={containerRef}
+        data-testid="video-player"
+        data-tenant-id={tenantId}
       className={`aip-relative aip-w-full aip-overflow-hidden aip-rounded-lg ${isDark ? 'aip-bg-black' : 'aip-bg-gray-100'}`}
     >
       <video
@@ -276,7 +285,7 @@ export function VideoPlayer({
       )}
 
       <div className="aip-absolute aip-bottom-0 aip-left-0 aip-right-0 aip-flex aip-flex-col aip-gap-2 aip-bg-gradient-to-t aip-from-black/70 aip-p-3">
-        <ProgressBar onSeek={handleSeek} thumbnails={thumbnails} />
+        <ProgressBar onSeek={handleSeek} thumbnails={thumbnails} highlights={highlights} onEvent={onEvent} />
 
         <div className="aip-flex aip-items-center aip-gap-3">
           <button aria-label="Rewind 10 seconds" className="aip-flex aip-items-center aip-justify-center aip-min-w-[44px] aip-min-h-[44px] aip-text-white aip-opacity-80 hover:aip-opacity-100" onClick={handleSkipBackward}>⏪</button>
@@ -338,6 +347,14 @@ export function VideoPlayer({
           </button>
         </div>
       </div>
+      </div>
+
+      {(features.summary || features.transcript) && (
+        <div className="aip-flex aip-flex-col aip-gap-3">
+          {features.summary && <SummaryPanel isDark={isDark} />}
+          {features.transcript && <TranscriptPanel isDark={isDark} onEvent={onEvent} />}
+        </div>
+      )}
     </div>
   )
 }
