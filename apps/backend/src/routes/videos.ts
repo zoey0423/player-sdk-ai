@@ -3,6 +3,7 @@ import { eq, and } from 'drizzle-orm'
 import { db } from '../db'
 import { videos, summaries, highlights, transcripts } from '../db/schema'
 import { authMiddleware } from '../middleware/auth'
+import { runAiPipeline } from '../services/ai-pipeline'
 
 const router = Router()
 router.use(authMiddleware)
@@ -25,7 +26,11 @@ router.post('/', async (req, res) => {
     .values({ tenantId: req.tenantId, url, title: typeof title === 'string' ? title : null, status: 'pending' })
     .returning({ id: videos.id })
 
-  // AI pipeline trigger happens in Story 5.x
+  // Fire-and-forget AI pipeline (Story 5.x)
+  if (row?.id) {
+    runAiPipeline(row.id, req.tenantId, url, db).catch(() => {})
+  }
+
   res.status(202).json({ data: { videoId: row?.id, status: 'pending' } })
 })
 
